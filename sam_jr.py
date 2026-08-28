@@ -124,7 +124,6 @@ class SpotifyAdMuter(FileSystemEventHandler):
 
         self.last_triggered = current_time
 
-        time.sleep(0.1)  # Wait for the ad to register in currently playing
         manage_spotify_volume()
 
 
