@@ -36,7 +36,8 @@ print(f"[*] Watching directory: {TARGET_DIR}")
 
 def stamp(*obj: object) -> None:
     """Print with a timestamp."""
-    print(*obj, end=f" \033[37m[{datetime.now()}]\033[0m\n")
+    now = datetime.now().strftime('%d %B %H:%M:%S.%f')[:-3]
+    print(*obj, end=f" \033[37m[{now}]\033[0m\n")
 
 
 def run_osascript(script: str) -> str | None:
@@ -58,7 +59,11 @@ def run_osascript(script: str) -> str | None:
         return None
 
 
-def manage_spotify_volume() -> None:
+def manage_spotify_volume() -> bool:
+    """Get track info and mute/unmute accordingly.
+
+    Return whether mute state flipped.
+    """
     global WAS_MUTED
 
     apple_script = (
@@ -78,12 +83,12 @@ def manage_spotify_volume() -> None:
     script_output = run_osascript(apple_script)
 
     if script_output is None:
-        return
+        return False
 
     # Split the output safely back into components
     parts = script_output.split("|||")
     if len(parts) < 2:
-        return
+        return False
 
     this_is_an_ad = not parts[0].strip() or not parts[1].strip()
 
@@ -92,11 +97,14 @@ def manage_spotify_volume() -> None:
         run_osascript('tell application "Spotify" to set sound volume to 0')
         play_sound()
         WAS_MUTED = True
+        return True
     elif not this_is_an_ad and WAS_MUTED:
         stamp(f"[✓] Music Restored — Setting Spotify volume to 100.")
         run_osascript(
             'tell application "Spotify" to set sound volume to 100')
         WAS_MUTED = False
+        return True
+    return False
 
 
 def play_sound() -> None:
@@ -110,21 +118,22 @@ class SpotifyAdMuter(FileSystemEventHandler):
 
     def __init__(self) -> None:
         super().__init__()
-        self.throttle_seconds = 2
-        self.last_triggered = 0.0
+        self.last_mute_state_flip = 0.0
 
     def on_modified(self, event):
         if event.is_directory:
             return
 
         current_time = time.time()
-
-        if current_time - self.last_triggered < self.throttle_seconds:
+        # Songs and ads are all probably longer than 10 seconds
+        if current_time - self.last_mute_state_flip < 10:
             return
 
-        self.last_triggered = current_time
-
-        manage_spotify_volume()
+        stamp("yas")
+        mute_state_flipped = manage_spotify_volume()
+        if mute_state_flipped:
+            self.last_mute_state_flip = current_time
+        time.sleep(0.1)
 
 
 if __name__ == "__main__":
