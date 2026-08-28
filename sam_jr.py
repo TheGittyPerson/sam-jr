@@ -143,5 +143,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         stamp("\n[*] Stopping observer...")
         observer.stop()
+    finally:
+        stamp("\n[*] Exited at:")
 
     observer.join()
