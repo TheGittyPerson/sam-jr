@@ -114,6 +114,9 @@ class SpotifyAdMuter(FileSystemEventHandler):
         self.last_triggered = 0.0
 
     def on_modified(self, event):
+        if event.is_directory:
+            return
+
         current_time = time.time()
 
         if current_time - self.last_triggered < self.throttle_seconds:
