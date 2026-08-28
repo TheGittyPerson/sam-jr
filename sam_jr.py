@@ -9,9 +9,9 @@ from watchdog.events import FileSystemEventHandler
 
 # --- Global Configuration ---
 
-TARGET_PATTERN = os.path.expanduser(
+TARGET_PATTERN: str = os.path.expanduser(
     "~/Library/Application Support/Spotify/Users/*-user/ad-state-storage.bnk")
-MATCHED_FILES = glob.glob(TARGET_PATTERN)
+MATCHED_FILES: list[str] = glob.glob(TARGET_PATTERN)
 
 if not MATCHED_FILES:
     print("Error: Could not find ad-state-storage.bnk matching pattern: "
@@ -20,13 +20,13 @@ if not MATCHED_FILES:
           "least once.")
     sys.exit(1)
 
-TARGET_FILE_PATH = MATCHED_FILES[0]
-TARGET_DIR = os.path.dirname(TARGET_FILE_PATH)
-FILE_NAME = os.path.basename(TARGET_FILE_PATH)
+TARGET_FILE_PATH: str = MATCHED_FILES[0]
+TARGET_DIR: str = os.path.dirname(TARGET_FILE_PATH)
+FILE_NAME: str = os.path.basename(TARGET_FILE_PATH)
 
-ALERT_SOUND_PATH = "/System/Library/Sounds/Bottle.aiff"
+ALERT_SOUND_PATH: str = "/System/Library/Sounds/Bottle.aiff"
 
-WAS_MUTED = False
+WAS_MUTED: bool = False
 
 print(f"[✓] Successfully resolved target file: {TARGET_FILE_PATH}")
 print(f"[*] Watching directory: {TARGET_DIR}")
@@ -34,7 +34,12 @@ print(f"[*] Watching directory: {TARGET_DIR}")
 # ----------------------------
 
 
-def run_osascript(script):
+def stamp(*obj: object) -> None:
+    """Print with a timestamp."""
+    print(*obj, end=f" \033[37m[{datetime.now()}]\033[0m")
+
+
+def run_osascript(script: str) -> str | None:
     """Helper function to execute AppleScript commands via shell."""
     try:
         result = subprocess.run(
@@ -45,14 +50,15 @@ def run_osascript(script):
         )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        print(
+        stamp(
             "[˟] Error while telling Spotify "
             f"{script.removeprefix('tell application \"Spotify\" ')}"
         )
         print(e.output)
+        return None
 
 
-def manage_spotify_volume():
+def manage_spotify_volume() -> None:
     global WAS_MUTED
 
     apple_script = (
@@ -82,18 +88,18 @@ def manage_spotify_volume():
     this_is_an_ad = not parts[0].strip() or not parts[1].strip()
 
     if this_is_an_ad and not WAS_MUTED:
-        print(f"[!] Ad Detected — Muting Spotify volume.")
+        stamp(f"[!] Ad Detected — Muting Spotify volume.")
         run_osascript('tell application "Spotify" to set sound volume to 0')
         play_sound()
         WAS_MUTED = True
     elif not this_is_an_ad and WAS_MUTED:
-        print(f"[✓] Music Restored — Setting Spotify volume to 100.")
+        stamp(f"[✓] Music Restored — Setting Spotify volume to 100.")
         run_osascript(
             'tell application "Spotify" to set sound volume to 100')
         WAS_MUTED = False
 
 
-def play_sound():
+def play_sound() -> None:
     """Plays the built-in macOS alert sound asynchronously."""
     if os.path.exists(ALERT_SOUND_PATH):
         subprocess.Popen(["afplay", ALERT_SOUND_PATH])
@@ -102,7 +108,7 @@ def play_sound():
 class SpotifyAdMuter(FileSystemEventHandler):
     """Custom event handler that listens for file modifications."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.throttle_seconds = 2
         self.last_triggered = 0.0
@@ -127,13 +133,13 @@ if __name__ == "__main__":
     observer.schedule(event_handler, path=TARGET_DIR, recursive=False)
     observer.start()
 
-    print("[*] Script running. Play some music to begin monitoring...")
+    stamp("[*] Script running. Play some music to begin monitoring...")
 
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n[*] Stopping observer...")
+        stamp("\n[*] Stopping observer...")
         observer.stop()
 
     observer.join()
