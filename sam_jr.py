@@ -3,6 +3,7 @@ import os
 import glob
 import time
 import subprocess
+from datetime import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -27,7 +28,7 @@ ALERT_SOUND_PATH = "/System/Library/Sounds/Bottle.aiff"
 
 WAS_MUTED = False
 
-print(f"[*] Successfully resolved target file: {TARGET_FILE_PATH}")
+print(f"[✓] Successfully resolved target file: {TARGET_FILE_PATH}")
 print(f"[*] Watching directory: {TARGET_DIR}")
 
 # ----------------------------
@@ -43,32 +44,53 @@ def run_osascript(script):
             check=True
         )
         return result.stdout.strip()
-    except subprocess.CalledProcessError:
-        return None
+    except subprocess.CalledProcessError as e:
+        print(
+            "[˟] Error while telling Spotify "
+            f"{script.removeprefix('tell application \"Spotify\" ')}"
+        )
+        print(e.output)
 
 
 def manage_spotify_volume():
     global WAS_MUTED
 
-    apple_script = 'tell application "Spotify" to name of current track'
-    track_name = run_osascript(apple_script)
+    apple_script = (
+        'tell application "Spotify"\n'
+        '    if it is running then\n'
+        '        try\n'
+        '            set tArtist to artist of current track\n'
+        '            set tAlbum to album of current track\n'
+        '            return tArtist & "|||" & tAlbum\n'
+        '        on error\n'
+        '            return ""\n'
+        '        end try\n'
+        '    end if\n'
+        'end tell'
+    )
 
-    if not track_name:
+    script_output = run_osascript(apple_script)
+
+    if script_output is None:
         return
 
-    if "advertisement" in track_name.lower():
-        if not WAS_MUTED:
-            print(f"[!] Ad Detected: '{track_name}'. Muting Spotify volume.")
-            run_osascript('tell application "Spotify" to set sound volume to 0')
-            play_sound()
-            WAS_MUTED = True
-    else:
-        if WAS_MUTED:
-            print(f"[✓] Music Restored: '{track_name}'. "
-                  "Setting Spotify volume to 100.")
-            run_osascript(
-                'tell application "Spotify" to set sound volume to 100')
-            WAS_MUTED = False
+    # Split the output safely back into components
+    parts = script_output.split("|||")
+    if len(parts) < 2:
+        return
+
+    this_is_an_ad = not parts[0].strip() or not parts[1].strip()
+
+    if this_is_an_ad and not WAS_MUTED:
+        print(f"[!] Ad Detected — Muting Spotify volume.")
+        run_osascript('tell application "Spotify" to set sound volume to 0')
+        play_sound()
+        WAS_MUTED = True
+    elif not this_is_an_ad and WAS_MUTED:
+        print(f"[✓] Music Restored — Setting Spotify volume to 100.")
+        run_osascript(
+            'tell application "Spotify" to set sound volume to 100')
+        WAS_MUTED = False
 
 
 def play_sound():
@@ -80,16 +102,21 @@ def play_sound():
 class SpotifyAdMuter(FileSystemEventHandler):
     """Custom event handler that listens for file modifications."""
 
+    def __init__(self):
+        super().__init__()
+        self.throttle_seconds = 2
+        self.last_triggered = 0.0
+
     def on_modified(self, event):
-        # Watchdog fires events for directories too,
-        # so ensure we only track our file
-        if event.is_directory:
+        current_time = time.time()
+
+        if current_time - self.last_triggered < self.throttle_seconds:
             return
 
-        if (os.path.abspath(str(event.src_path))
-                == os.path.abspath(TARGET_FILE_PATH)):
-            time.sleep(0.1)
-            manage_spotify_volume()
+        self.last_triggered = current_time
+
+        time.sleep(0.3)  # Wait for the ad to register in currently playing
+        manage_spotify_volume()
 
 
 if __name__ == "__main__":
