@@ -36,7 +36,7 @@ print(f"[*] Watching directory: {TARGET_DIR}")
 
 def stamp(*obj: object) -> None:
     """Print with a timestamp."""
-    print(*obj, end=f" \033[37m[{datetime.now()}]\033[0m")
+    print(*obj, end=f" \033[37m[{datetime.now()}]\033[0m\n")
 
 
 def run_osascript(script: str) -> str | None:
