@@ -4,6 +4,8 @@ import glob
 import time
 import subprocess
 from datetime import datetime
+from typing import Literal
+
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -30,6 +32,7 @@ WAS_MUTED: bool = False
 
 print(f"[✓] Successfully resolved target file: {TARGET_FILE_PATH}")
 print(f"[*] Watching directory: {TARGET_DIR}")
+
 
 # ----------------------------
 
@@ -59,10 +62,10 @@ def run_osascript(script: str) -> str | None:
         return None
 
 
-def manage_spotify_volume() -> bool:
+def manage_spotify_volume() -> Literal["muted", "unmuted", "none"]:
     """Get track info and mute/unmute accordingly.
 
-    Return whether mute state flipped.
+    Return the action done: "muted", "unmuted", or "none"
     """
     global WAS_MUTED
 
@@ -83,12 +86,12 @@ def manage_spotify_volume() -> bool:
     script_output = run_osascript(apple_script)
 
     if script_output is None:
-        return False
+        return "none"
 
     # Split the output safely back into components
     parts = script_output.split("|||")
     if len(parts) < 2:
-        return False
+        return "none"
 
     this_is_an_ad = not parts[0].strip() or not parts[1].strip()
 
@@ -97,14 +100,14 @@ def manage_spotify_volume() -> bool:
         run_osascript('tell application "Spotify" to set sound volume to 0')
         play_sound()
         WAS_MUTED = True
-        return True
+        return "muted"
     elif not this_is_an_ad and WAS_MUTED:
         stamp(f"[✓] Music Restored — Setting Spotify volume to 100.")
         run_osascript(
             'tell application "Spotify" to set sound volume to 100')
         WAS_MUTED = False
-        return True
-    return False
+        return "unmuted"
+    return "none"
 
 
 def play_sound() -> None:
@@ -118,21 +121,29 @@ class SpotifyAdMuter(FileSystemEventHandler):
 
     def __init__(self) -> None:
         super().__init__()
-        self.last_mute_state_flip = 0.0
+        self.last_ad_start = 0.0
+        self.last_ad_end = 0.0
+        self.count = 0
 
-    def on_modified(self, event):
+    def on_modified(self, event, count: bool = False):
         if event.is_directory:
             return
 
         current_time = time.time()
-        # Songs and ads are all probably longer than 10 seconds
-        if current_time - self.last_mute_state_flip < 10:
+        # Ads are all probably longer than 10 seconds
+        # After an ad session, songs should play at least 100 seconds
+        if current_time - self.last_ad_start < 10 \
+                or current_time - self.last_ad_end < 100:
             return
 
-        stamp("yas")
+        if count:
+            self.count += 1
+            stamp(self.count)
         mute_state_flipped = manage_spotify_volume()
-        if mute_state_flipped:
-            self.last_mute_state_flip = current_time
+        if mute_state_flipped == "muted":
+            self.last_ad_start = current_time
+        if mute_state_flipped == "unmuted":
+            self.last_ad_end = current_time
         time.sleep(0.1)
 
 
