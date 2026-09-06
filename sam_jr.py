@@ -130,10 +130,10 @@ class SpotifyAdMuter(FileSystemEventHandler):
             return
 
         current_time = time.time()
-        # Ads are all probably longer than 10 seconds
-        # After an ad session, songs should play at least 100 seconds
-        if current_time - self.last_ad_start < 10 \
-                or current_time - self.last_ad_end < 100:
+        # Ads are all probably longer than 50 seconds
+        # After an ad session, songs should play at least 120 seconds
+        if current_time - self.last_ad_start < 50 \
+                or current_time - self.last_ad_end < 120:
             return
 
         if count:
