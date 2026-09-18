@@ -130,10 +130,11 @@ class SpotifyAdMuter(FileSystemEventHandler):
             return
 
         current_time = time.time()
-        # Ads are all probably longer than 50 seconds
         # After an ad session, songs should play at least 120 seconds
-        if current_time - self.last_ad_start < 50 \
-                or current_time - self.last_ad_end < 120:
+        # Not applied to during an ad session. Sometimes I want to quit
+        # Spotify suring an ad to immediately skip the ad. Adding the time
+        # limit would prevent instant volume restoration.
+        if current_time - self.last_ad_end < 120:
             return
 
         if count:
