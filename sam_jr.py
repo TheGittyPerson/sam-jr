@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 import glob
 import time
 import subprocess
@@ -93,7 +94,13 @@ def manage_spotify_volume() -> Literal["muted", "unmuted", "none"]:
     if len(parts) < 2:
         return "none"
 
-    this_is_an_ad = not parts[0].strip() or not parts[1].strip()
+    japanese_pattern = re.compile(
+        r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\uFF00-\uFFEF]'
+    )
+    
+    this_is_an_ad = (not parts[0].strip() or not parts[1].strip()
+                     or bool(japanese_pattern.search(parts[0]))
+                     or bool(japanese_pattern.search(parts[1])))
 
     if this_is_an_ad and not WAS_MUTED:
         stamp(f"[!] Ad Detected — Muting Spotify volume.")
