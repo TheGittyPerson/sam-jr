@@ -1,6 +1,5 @@
 import sys
 import os
-import re
 import glob
 import time
 import subprocess
@@ -64,7 +63,7 @@ def run_osascript(script: str) -> str | None:
 
 
 def manage_spotify_volume() -> Literal["muted", "unmuted", "none"]:
-    """Get track info and mute/unmute accordingly.
+    """Check track URI and mute/unmute accordingly.
 
     Return the action done: "muted", "unmuted", or "none"
     """
@@ -74,9 +73,7 @@ def manage_spotify_volume() -> Literal["muted", "unmuted", "none"]:
         'tell application "Spotify"\n'
         '    if it is running then\n'
         '        try\n'
-        '            set tArtist to artist of current track\n'
-        '            set tAlbum to album of current track\n'
-        '            return tArtist & "|||" & tAlbum\n'
+        '            return spotify url of current track\n'
         '        on error\n'
         '            return ""\n'
         '        end try\n'
@@ -84,32 +81,23 @@ def manage_spotify_volume() -> Literal["muted", "unmuted", "none"]:
         'end tell'
     )
 
-    script_output = run_osascript(apple_script)
+    track_uri = run_osascript(apple_script)
 
-    if script_output is None:
+    if not track_uri:
         return "none"
 
-    # Split the output safely back into components
-    parts = script_output.split("|||")
-    if len(parts) < 2:
-        return "none"
+    print(f"Current URI: {track_uri}")
 
-    japanese_pattern = re.compile(
-        r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\uFF00-\uFFEF]'
-    )
-    
-    this_is_an_ad = (not parts[0].strip() or not parts[1].strip()
-                     or bool(japanese_pattern.search(parts[0]))
-                     or bool(japanese_pattern.search(parts[1])))
+    this_is_an_ad = track_uri.startswith("spotify:ad:")
 
     if this_is_an_ad and not WAS_MUTED:
-        stamp(f"[!] Ad Detected — Muting Spotify volume.")
+        stamp("[!] Ad Detected — Muting Spotify volume.")
         run_osascript('tell application "Spotify" to set sound volume to 0')
         play_sound()
         WAS_MUTED = True
         return "muted"
     elif not this_is_an_ad and WAS_MUTED:
-        stamp(f"[✓] Music Restored — Setting Spotify volume to 100.")
+        stamp("[✓] Music Restored — Setting Spotify volume to 100.")
         run_osascript(
             'tell application "Spotify" to set sound volume to 100')
         WAS_MUTED = False
@@ -133,13 +121,13 @@ class SpotifyAdMuter(FileSystemEventHandler):
         self.count = 0
 
     def on_modified(self, event, count: bool = False):
-        if event.is_directory:
+        if event.src_path != TARGET_FILE_PATH:
             return
 
         current_time = time.time()
         # After an ad session, songs should play at least 120 seconds
         # Not applied to during an ad session. Sometimes I want to quit
-        # Spotify suring an ad to immediately skip the ad. Adding the time
+        # Spotify during an ad to immediately skip the ad. Adding the time
         # limit would prevent instant volume restoration.
         if current_time - self.last_ad_end < 120:
             return
