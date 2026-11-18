@@ -121,7 +121,7 @@ class SpotifyAdMuter(FileSystemEventHandler):
         self.count = 0
 
     def on_modified(self, event, count: bool = False):
-        if event.src_path != TARGET_FILE_PATH:
+        if event.is_directory:
             return
 
         current_time = time.time()
